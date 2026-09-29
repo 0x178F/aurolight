@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos:
+    name: macOS app
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26.6"
+      - name: Install format and lint tools
+        run: brew install clang-format shellcheck swiftlint periphery
+      - name: Check formatting
+        run: make format-check
+      - name: Lint and unused code
+        run: make lint
+      - name: Test
+        run: |
+          swift test --package-path core -Xswiftc -warnings-as-errors
+          swift test --package-path macos -Xswiftc -warnings-as-errors
+      - name: Bundle (ad-hoc signed)
+        run: SIGN_IDENTITY=- make app && codesign --verify --strict build/Aurolight.app
+
+  core-linux:
+    name: Core on Linux
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build
+        run: swift build --package-path core -Xswiftc -warnings-as-errors
+      - name: Test
+        run: swift test --package-path core -Xswiftc -warnings-as-errors
+
+  benchmarks:
+    name: Detection benchmarks
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run
+        run: AUROLIGHT_BENCHMARK=1 swift test --package-path core -c release --filter Benchmark
+
+  boards:
+    name: Firmware boards
+    runs-on: ubuntu-latest
+    outputs:
+      list: ${{ steps.list.outputs.list }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: list
+        run: echo "list=$(./scripts/firmware-boards.sh | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+  firmware:
+    name: Firmware (${{ matrix.board }})
+    needs: boards
+    runs-on: ubuntu-latest
+    env:
+      PLATFORMIO_VERSION: "6.1.*"
+    strategy:
+      fail-fast: false
+      matrix:
+        board: ${{ fromJSON(needs.boards.outputs.list) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/cache@v6
+        with:
+          path: ~/.platformio
+          key: pio-${{ env.PLATFORMIO_VERSION }}-${{ matrix.board }}-${{ hashFiles('firmware/platformio.ini') }}
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install "platformio==${{ env.PLATFORMIO_VERSION }}"
+      - run: pio run -d firmware -e ${{ matrix.board }}

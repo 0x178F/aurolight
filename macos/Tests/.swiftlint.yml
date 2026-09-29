@@ -1,0 +1,3 @@
+# Tests may force-unwrap what they just built.
+disabled_rules:
+  - force_unwrapping

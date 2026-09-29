@@ -1,0 +1,6 @@
+BasedOnStyle: Google
+ColumnLimit: 120
+IndentPPDirectives: BeforeHash
+AllowShortLoopsOnASingleLine: true
+AllowShortIfStatementsOnASingleLine: WithoutElse
+SortIncludes: Never

@@ -1,0 +1,68 @@
+# Signing secrets: SIGNING_P12 (base64 of a .p12 with its private key) and SIGNING_P12_PASSWORD. Use the same
+# certificate for every release, or users grant Screen Recording again after updating.
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    name: Release PR
+    runs-on: ubuntu-latest
+    outputs:
+      created: ${{ steps.release.outputs.release_created }}
+      tag: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+
+  disk-image:
+    name: Disk image
+    needs: release-please
+    if: needs.release-please.outputs.created == 'true'
+    runs-on: macos-26
+    env:
+      TAG: ${{ needs.release-please.outputs.tag }}
+      SIGNED: ${{ secrets.SIGNING_P12 != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag }}
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26.6"
+      - name: Test
+        run: make test
+
+      - name: Import the signing certificate
+        if: env.SIGNED == 'true'
+        uses: apple-actions/import-codesign-certs@v7
+        with:
+          p12-file-base64: ${{ secrets.SIGNING_P12 }}
+          p12-password: ${{ secrets.SIGNING_P12_PASSWORD }}
+      - name: Find the signing identity
+        if: env.SIGNED == 'true'
+        # By hash: a self-signed certificate isn't trusted, so codesign can't look it up by name.
+        run: echo "SIGN_IDENTITY=$(security find-identity -p codesigning | awk '/^ *1\)/ {print $2; exit}')" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: ./scripts/release.sh
+
+      - name: Upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "$TAG" build/Aurolight-*.dmg
+          notes="$RUNNER_TEMP/notes.md"
+          {
+            echo "Move Aurolight to Applications and open it. macOS blocks apps from outside the App Store the first"
+            echo "time: choose **Open Anyway** in System Settings › Privacy & Security."
+            echo
+            gh release view "$TAG" --json body --jq .body
+          } > "$notes"
+          gh release edit "$TAG" --notes-file "$notes"

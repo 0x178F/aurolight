@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Conventional Commits drive the version and the changelog (release-please).
+set -euo pipefail
+
+subject="$(head -n 1 "$1")"
+pattern='^(feat|fix|perf|refactor|docs|test|build|ci|chore|revert)(\([a-z0-9-]+\))?!?: .+'
+[[ "$subject" =~ $pattern || "$subject" =~ ^(Merge|Revert|fixup!|squash!) ]] && exit 0
+
+echo "commit-msg: \"$subject\" isn't a Conventional Commit, e.g. \"feat: add a Neon effect\" or" >&2
+echo "\"fix(detection): keep letterbox bars through credits\"." >&2
+exit 1

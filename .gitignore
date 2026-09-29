@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+
+# Swift / Xcode
+.build/
+.swiftpm/
+
+# Build products (app bundle)
+build/
+
+# Benchmark footage (scripts/fetch-footage.sh)
+.footage/
+
+# Local code-signing identity
+scripts/.signing-identity
+
+# PlatformIO
+firmware/.pio/

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(git rev-parse --show-toplevel)"
+
+for tool in clang-format shellcheck swiftlint; do
+  command -v "$tool" >/dev/null || {
+    echo "pre-commit: $tool is missing. Install it with: brew install $tool" >&2
+    exit 1
+  }
+done
+
+make --no-print-directory format-check
+swiftlint lint --quiet --strict
+shellcheck scripts/*.sh scripts/git-hooks/*

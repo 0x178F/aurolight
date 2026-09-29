@@ -1,0 +1,4 @@
+retain_codable_properties: true
+retain_equatable_properties: true
+disable_redundant_public_analysis: true
+relative_results: true
